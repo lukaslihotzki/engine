@@ -1508,6 +1508,37 @@ class _ImageInfo {
   int rowBytes;
 }
 
+ByteBuffer bmpHeader(_ImageInfo imageInfo) {
+  if (imageInfo.rowBytes != imageInfo.width * 4) {
+    throw UnsupportedError(
+        'Custom rowBytes is not supported.');
+  }
+  final contentSize = imageInfo.width * imageInfo.height * 4;
+  final header = ByteData(122);
+  header.setUint8(0x0, 0x42);
+  header.setUint8(0x1, 0x4d);
+  header.setInt32(0x2, contentSize + header.lengthInBytes, Endian.little);
+  header.setInt32(0xa, header.lengthInBytes, Endian.little);
+  header.setUint32(0xe, 108, Endian.little);
+  header.setUint32(0x12, imageInfo.width, Endian.little);
+  header.setUint32(0x16, -imageInfo.height, Endian.little);
+  header.setUint16(0x1a, 1, Endian.little);
+  header.setUint32(0x1c, 32, Endian.little);
+  header.setUint32(0x1e, 3, Endian.little);
+  header.setUint32(0x22, contentSize, Endian.little);
+  if (imageInfo.format == 0) {
+    header.setUint32(0x36, 0x000000ff, Endian.little);
+    header.setUint32(0x3a, 0x0000ff00, Endian.little);
+    header.setUint32(0x3e, 0x00ff0000, Endian.little);
+  } else {
+    header.setUint32(0x36, 0x00ff0000, Endian.little);
+    header.setUint32(0x3a, 0x0000ff00, Endian.little);
+    header.setUint32(0x3e, 0x000000ff, Endian.little);
+  }
+  header.setUint32(0x42, 0xff000000, Endian.little);
+  return header.buffer;
+}
+
 /// Callback signature for [decodeImageFromList].
 typedef ImageDecoderCallback = void Function(Image result);
 
@@ -1600,7 +1631,7 @@ String? _instantiateImageCodec(
     }
     return null;
   }
-  final html.Blob blob = html.Blob(<dynamic>[list.buffer]);
+  final html.Blob blob = html.Blob(<dynamic>[if (imageInfo != null) bmpHeader(imageInfo), list.buffer]);
   callback(engine.HtmlBlobCodec(blob));
   return null;
 }

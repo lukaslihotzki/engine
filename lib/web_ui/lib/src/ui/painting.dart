@@ -1508,11 +1508,7 @@ class _ImageInfo {
   int rowBytes;
 }
 
-ByteBuffer bmpHeader(_ImageInfo imageInfo) {
-  if (imageInfo.rowBytes != imageInfo.width * 4) {
-    throw UnsupportedError(
-        'Custom rowBytes is not supported.');
-  }
+Uint8List bmpHeader(_ImageInfo imageInfo) {
   final contentSize = imageInfo.width * imageInfo.height * 4;
   final header = ByteData(122);
   header.setUint8(0x0, 0x42);
@@ -1536,7 +1532,11 @@ ByteBuffer bmpHeader(_ImageInfo imageInfo) {
     header.setUint32(0x3e, 0x000000ff, Endian.little);
   }
   header.setUint32(0x42, 0xff000000, Endian.little);
-  return header.buffer;
+  return header.buffer.asUint8List();
+}
+
+Iterable<Uint8List> snipLines(Uint8List data, int inLen, int outLen) {
+  return Iterable.generate(data.lengthInBytes ~/ inLen, (i) => Uint8List.sublistView(data, i * inLen, i * inLen + outLen));
 }
 
 /// Callback signature for [decodeImageFromList].
@@ -1631,7 +1631,20 @@ String? _instantiateImageCodec(
     }
     return null;
   }
-  final html.Blob blob = html.Blob(<dynamic>[if (imageInfo != null) bmpHeader(imageInfo), list.buffer]);
+
+  var parts;
+  if (imageInfo != null) {
+    parts = [bmpHeader(imageInfo)];
+    final bmpRowBytes = imageInfo.width * 4;
+    if (imageInfo.rowBytes == bmpRowBytes) {
+      parts.addAll([list]);
+    } else {
+      parts.addAll(snipLines(list, imageInfo.rowBytes, bmpRowBytes));
+    }
+  } else {
+    parts = [list];
+  }
+  final html.Blob blob = html.Blob(parts);
   callback(engine.HtmlBlobCodec(blob));
   return null;
 }
